@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Voice Resume Builder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #1a1a1a;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #444;
+    }
+    .card h2 { margin-top: 0; }
+    .step { font-size: 14px; color: #999; }
+    .question { font-size: 18px; font-weight: bold; margin: 15px 0; }
+    .buttons { display: flex; gap: 10px; margin: 15px 0; flex-wrap: wrap; }
+    button {
+      padding: 10px 15px;
+      background: #0066ff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    button:hover { background: #0052cc; }
+    button.secondary {
+      background: #444;
+    }
+    button.secondary:hover { background: #555; }
+    textarea, input {
+      width: 100%;
+      padding: 10px;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      color: #fff;
+      border-radius: 5px;
+      font-size: 13px;
+      font-family: monospace;
+      margin: 10px 0;
+      resize: vertical;
+      min-height: 60px;
+    }
+    textarea:focus, input:focus {
+      outline: none;
+      border-color: #0066ff;
+      box-shadow: 0 0 5px #0066ff;
+    }
+    label { font-size: 12px; color: #aaa; display: block; margin-top: 10px; }
+    .status {
+      min-height: 25px;
+      font-size: 14px;
+      padding: 5px;
+      border-radius: 5px;
+      background: #333;
+      margin: 10px 0;
+    }
+    .status.success { background: #1a4d1a; color: #66ff66; }
+    .status.error { background: #4d1a1a; color: #ff6666; }
+    .status.info { background: #1a2a4d; color: #66b3ff; }
+    #resume {
+      background: white;
+      color: black;
+      padding: 30px;
+      border-radius: 5px;
+      font-family: "Times New Roman", serif;
+      max-height: 600px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    #resume h2 { margin: 0 0 5px 0; font-size: 22px; }
+    #resume .contact { font-size: 11px; margin-bottom: 15px; color: #555; }
+    #resume h3 {
+      font-size: 12px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin: 12px 0 5px 0;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 3px;
+    }
+    #resume p { margin: 3px 0; }
+    #resume ul { margin: 5px 0; padding-left: 20px; }
+    .download-btn { margin-top: 15px; width: 100%; }
+    .hint { font-size: 12px; color: #888; margin-top: 10px; font-style: italic; }
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🎤 Voice Resume Builder</h1>
+
+  <div class="grid">
+    <!-- LEFT: Input -->
+    <div class="card">
+      <h2>📝 Voice Input</h2>
+      <div class="step" id="step-info">Step 1 of 6</div>
+      <div class="question" id="question">What is your full name?</div>
+      <div class="status info" id="status">Ready</div>
+        <div id="listen-indicator" class="hint">Mode: Idle</div>
+        <div id="meter" aria-hidden="true" style="height:8px; background:#333; border-radius: 4px; margin-top:8px;">
+          <div id="meter-level" style="height:100%; width:0%; background:linear-gradient(90deg,#66ff66,#ffcc00,#ff6666); border-radius:4px"></div>
+        </div>
+
+      <div class="buttons">
+        <button id="btn-listen">🎤 Listen (10s)</button>
+        <button id="btn-stop" class="secondary">Stop</button>
+        <button id="btn-confirm">✅ Confirm & Parse</button>
+        <button id="btn-skip" class="secondary">⏭ Skip</button>
+      </div>
+
+      <!-- Upload disabled: Using Web Speech API exclusively -->
+      <!-- Upload controls removed to avoid using /transcribe endpoint -->
+
+      <label>📢 What I heard:</label>
+      <textarea id="transcript" placeholder="Speech will appear here..."></textarea>
+
+      <label>✏️ Edit before submitting:</label>
+      <textarea id="manual" placeholder="Make changes here if needed..."></textarea>
+
+      <div class="hint">💡 Speak clearly. Example: "I studied at Rajalakshmi Institute in CSE with 8.5 CGPA"</div>
+    </div>
+
+    <!-- RIGHT: Resume Preview -->
+    <div class="card">
+      <h2>📄 Resume</h2>
+      <div id="resume">
+        <h2>Your Name</h2>
+        <div class="contact">email@example.com | +91-9876543210</div>
+        <h3>Education</h3>
+        <p>B.Tech in Computer Science<br/>Your Institute<br/>CGPA: 0.0 (2024)</p>
+        <h3>Experience</h3>
+        <p>Role at Company<br/>2020 - 2022</p>
+        <h3>Skills</h3>
+        <p>Python, JavaScript, React</p>
+        <h3>Projects</h3>
+        <p><strong>Project Name</strong><br/>Description here<br/>Tech: Python, Flask</p>
+      </div>
+      <button id="btn-download" class="download-btn">⬇️ Download / Print PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Global state
+  const state = {
+    name: "Your Name",
+    email: "email@example.com",
+    phone: "+91-9876543210",
+    education: { institution: "Your Institute", degree: "B.Tech", field: "CS", cgpa: "0.0", year: "2024" },
+    skills: [],
+    experience: { company: "Company", role: "Role", startYear: "2020", endYear: "2022" },
+    projects: { title: "Project", description: "", tech: "" }
+  };
+
+  const questions = [
+    { id: "name", q: "What is your full name?" },
+    { id: "education", q: "Tell your education details: college name, degree, branch, CGPA and graduation year" },
+    { id: "skills", q: "What are your top technical skills? List them comma separated or say 'and'" },
+    { id: "experience", q: "Describe your work experience: company name, your role, start year and end year" },
+    { id: "projects", q: "Tell me about a project: project name, what it does, and technologies used" },
+    { id: "contact", q: "Tell your email address and phone number" }
+  ];
+
+  let currentQ = 0;
+  let mediaRecorder = null; // no longer used for transcription
+  let recordedChunks = [];
+  let isRecording = false;
+  let silenceTimer = null;
+  let audioCtx = null;
+  let analyser = null;
+  let sourceNode = null;
+  let dataArray = null;
+  let rafMeter = null;
+  const SILENCE_THRESHOLD = 900; // milliseconds silence to end recording
+  const MIN_SOUND_THRESHOLD = 0.02; // normalized RMS threshold
+  let lastLoudTime = 0;
+
+  // DOM
+  const transcript = document.getElementById("transcript");
+  const manual = document.getElementById("manual");
+  const question = document.getElementById("question");
+  const stepInfo = document.getElementById("step-info");
+  const status = document.getElementById("status");
+  const resume = document.getElementById("resume");
+  const btnListen = document.getElementById("btn-listen");
+  const btnStop = document.getElementById("btn-stop");
+  const btnConfirm = document.getElementById("btn-confirm");
+  const btnSkip = document.getElementById("btn-skip");
+  const btnUpload = document.getElementById("btn-upload");
+  const audioFile = document.getElementById("audio-file");
+  const fieldSelect = document.getElementById("field-select");
+  const btnDownload = document.getElementById("btn-download");
+
+  // Text-to-speech (read question)
+  function speak(text) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  // Initialize Whisper-based audio recording
+  async function initMediaRecorder() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      recordedChunks = [];
+      // Create AudioContext and analyser for level meter and silence detection
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sourceNode = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        sourceNode.connect(analyser);
+        updateMeter();
+      } catch (err) {
+        console.warn('AudioContext not available for meter:', err);
+      }
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        // legacy: stop the meter raf
+        if (rafMeter) {
+          cancelAnimationFrame(rafMeter);
+          rafMeter = null;
+        }
+      };
+
+      status.textContent = "🎙️ Ready to record (will auto-record)";
+      status.className = "status info";
+    } catch (err) {
+      status.textContent = "❌ Microphone access denied: " + err.message;
+      status.className = "status error";
+    }
+  }
+
+  // Start auto-recording when question is displayed
+  function startAutoRecording() {
+    if (!mediaRecorder || mediaRecorder.state === "recording") return;
+    recordedChunks = [];
+    mediaRecorder.start();
+    isRecording = true;
+    status.textContent = "🎤 Listening... (Speak now)";
+    status.className = "status info";
+    transcript.value = "";
+    clearTimeout(silenceTimer);
+    // mark when loud audio was last seen
+    lastLoudTime = performance.now();
+    // show mode
+    const li = document.getElementById('listen-indicator');
+    if (li) li.textContent = 'Mode: Listening (Whisper)';
+  }
+
+  // Stop recording after silence detected
+  function stopAutoRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      isRecording = false;
+      status.textContent = "⏳ Transcribing...";
+      status.className = "status info";
+      const li = document.getElementById('listen-indicator');
+      if (li) li.textContent = 'Mode: Transcribing (Whisper)';
+    }
+  }
+
+  // Detect silence using audio context
+  function setupSilenceDetection() {
+    // Now silence detection is driven by the analyser in updateMeter()
+    // This function keeps the existing behavior for backward compat but does nothing.
+  }
+
+  function updateMeter() {
+    if (!analyser || !dataArray) return;
+    analyser.getByteTimeDomainData(dataArray);
+    // compute normalized RMS
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      const v = (dataArray[i] - 128) / 128; // -1..1
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / dataArray.length);
+    const level = Math.min(1, rms / 0.4); // scale, 0.4 gives full bar
+    const pct = Math.round(level * 100);
+    const meterLevel = document.getElementById('meter-level');
+    if (meterLevel) meterLevel.style.width = pct + '%';
+    // If loud above threshold, update lastLoudTime
+    if (rms > MIN_SOUND_THRESHOLD) {
+      lastLoudTime = performance.now();
+    }
+
+    // If we're recording and we've seen silence for SILENCE_THRESHOLD, stop recording
+    if (isRecording) {
+      if (performance.now() - lastLoudTime > SILENCE_THRESHOLD) {
+        status.textContent = "🤐 Silence detected, stopping...";
+        stopAutoRecording();
+      }
+    }
+
+    // keep animating
+    rafMeter = requestAnimationFrame(updateMeter);
+  }
+
+  // Transcribe audio and parse
+  // transcribeAndParseAudio() removed — all speech is handled via Web Speech API and parseAndApply()
+
+  // Parse text with the backend '/parse' endpoint and update resume as usual
+  async function parseAndApply(text, fieldId) {
+    const q = { id: fieldId };
+    status.textContent = "⏳ Parsing...";
+    status.className = "status info";
+    try {
+      const res = await fetch("/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field: q.id, text })
+      });
+      const data = await res.json();
+      console.log("Parsed (fallback):", data);
+      if (data.name) state.name = data.name;
+      if (data.education) Object.assign(state.education, data.education);
+      if (data.skills) state.skills = data.skills;
+      if (data.experience) Object.assign(state.experience, data.experience);
+      if (data.projects) Object.assign(state.projects, data.projects);
+      if (data.contact) {
+        if (data.contact.email) state.email = data.contact.email;
+        if (data.contact.phone) state.phone = data.contact.phone;
+      }
+      renderResume();
+      status.textContent = "✅ Parsed (fallback)";
+      status.className = "status success";
+
+      if (currentQ < questions.length - 1) {
+        currentQ++;
+        setTimeout(updateQuestion, 1500);
+      } else {
+        status.textContent = "✅ All done! Ready to download.";
+      }
+    } catch (err) {
+      status.textContent = "❌ Parse error: " + err.message;
+      status.className = "status error";
+    }
+  }
+
+  // Use the browser Web Speech API to capture live speech when Whisper transcribe fails
+  function startSpeechRecognitionFallback(fieldId) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      status.textContent = "❌ Web Speech API (SpeechRecognition) not supported in this browser.";
+      status.className = "status error";
+      return;
+    }
+    const sr = new SR();
+    // expose globally so Stop button can stop it
+    window.fallbackRecognizer = sr;
+    sr.lang = "en-US";
+    sr.continuous = false;
+    sr.interimResults = false;
+    let transcriptText = "";
+    sr.onstart = () => {
+      clearTimeout(silenceTimer);
+      isRecording = false; // ensure media recorder isn't considered active
+      status.textContent = "🎙️ Fallback listening... Speak now";
+      status.className = "status info";
+      transcript.value = "";
+      const li = document.getElementById('listen-indicator');
+      if (li) li.textContent = 'Mode: Listening (Browser SR)';
+    };
+    sr.onresult = (e) => {
+      let result = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) result += e.results[i][0].transcript + " ";
+      }
+      transcriptText = result.trim();
+      transcript.value = transcriptText;
+      manual.value = transcriptText;
+    };
+    sr.onend = () => {
+      status.textContent = "✅ Fallback Listening ended";
+      status.className = "status success";
+      if (transcriptText) {
+        parseAndApply(transcriptText, fieldId);
+      } else {
+        status.textContent = "❌ No speech captured in fallback";
+        status.className = "status error";
+      }
+      const li = document.getElementById('listen-indicator');
+      if (li) li.textContent = 'Mode: Idle';
+      window.fallbackRecognizer = null;
+    };
+    sr.onerror = (e) => {
+      status.textContent = "❌ SpeechRecognition error: " + e.error;
+      status.className = "status error";
+    };
+    try {
+      // stop media recorder if it's running
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+      sr.start();
+    } catch (err) {
+      status.textContent = "❌ SpeechRecognition start failed: " + err.message;
+      status.className = "status error";
+    }
+  }
+
+  // Update question display and start auto-recording
+  function updateQuestion() {
+    const q = questions[currentQ];
+    question.textContent = q.q;
+    stepInfo.textContent = `Step ${currentQ + 1} of ${questions.length}`;
+    transcript.value = "";
+    manual.value = "";
+    status.textContent = "Ready";
+    status.className = "status info";
+    speak(q.q);
+    
+    // Auto-start SpeechRecognition (Web Speech API) after question is spoken (1.5s delay)
+    setTimeout(() => {
+      startSpeechRecognitionFallback(questions[currentQ].id);
+    }, 1500);
+  }
+
+  // Set up listener for user speech to reset silence timer (simple approach)
+  // Note: accurate VAD would need AudioContext, this is a simplified approach
+  setInterval(() => {
+    if (isRecording) {
+      setupSilenceDetection();
+    }
+  }, 500);
+
+  // Send to backend and parse (legacy, kept for manual text editing)
+  async function submitAnswer() {
+    const text = (manual.value.trim() || transcript.value.trim());
+    if (!text) {
+      status.textContent = "❌ Please speak or type something";
+      status.className = "status error";
+      return;
+    }
+
+    const q = questions[currentQ];
+    status.textContent = "⏳ Parsing...";
+    status.className = "status info";
+
+    try {
+      const res = await fetch("/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field: q.id, text })
+      });
+
+      const data = await res.json();
+      console.log("Parsed:", data);
+
+      if (data.name) state.name = data.name;
+      if (data.education) Object.assign(state.education, data.education);
+      if (data.skills) state.skills = data.skills;
+      if (data.experience) Object.assign(state.experience, data.experience);
+      if (data.projects) Object.assign(state.projects, data.projects);
+      if (data.contact) {
+        if (data.contact.email) state.email = data.contact.email;
+        if (data.contact.phone) state.phone = data.contact.phone;
+      }
+
+      renderResume();
+      status.textContent = "✅ Saved!";
+      status.className = "status success";
+
+      if (currentQ < questions.length - 1) {
+        currentQ++;
+        setTimeout(updateQuestion, 1500);
+      } else {
+        status.textContent = "✅ All done! Ready to download.";
+      }
+    } catch (err) {
+      status.textContent = "❌ Error: " + err.message;
+      status.className = "status error";
+    }
+  }
+
+  // Upload and transcribe
+  // Upload & Transcribe disabled — using Web Speech API only
+  if (btnUpload) {
+    btnUpload.addEventListener("click", async () => {
+      status.textContent = "❌ Upload & Transcribe disabled — use the microphone (Listen)";
+      status.className = "status error";
+    });
+  }
+
+  // Render resume
+  function renderResume() {
+    const ed = state.education;
+    const sk = state.skills.join(", ") || "Add skills";
+    const exp = state.experience;
+    const pr = state.projects;
+
+    resume.innerHTML = `
+      <h2>${state.name}</h2>
+      <div class="contact">${state.email} | ${state.phone}</div>
+      <h3>Education</h3>
+      <p>${ed.degree} in ${ed.field}<br/>${ed.institution}<br/>CGPA: ${ed.cgpa} (${ed.year})</p>
+      <h3>Experience</h3>
+      <p>${exp.role} at ${exp.company}<br/>${exp.startYear} - ${exp.endYear}</p>
+      <h3>Skills</h3>
+      <p>${sk}</p>
+      <h3>Projects</h3>
+      <p><strong>${pr.title}</strong><br/>${pr.description}<br/>Tech: ${pr.tech}</p>
+    `;
+  }
+
+  // Event listeners
+  btnListen.addEventListener("click", () => {
+    // Start Web Speech API (primary mechanism now)
+    startSpeechRecognitionFallback(questions[currentQ].id);
+  });
+
+  btnStop.addEventListener("click", () => {
+    // Stop any speech recognition if active
+    if (window.fallbackRecognizer && typeof window.fallbackRecognizer.stop === 'function') {
+      try { window.fallbackRecognizer.stop(); } catch(e){}
+    }
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      stopAutoRecording();
+    }
+    const li = document.getElementById('listen-indicator');
+    if (li) li.textContent = 'Mode: Idle';
+    const meterLevel = document.getElementById('meter-level');
+    if (meterLevel) meterLevel.style.width = '0%';
+    if (audioCtx && audioCtx.state === 'running') {
+      try { audioCtx.suspend(); } catch(e){/* ignore */}
+    }
+  });
+
+  btnConfirm.addEventListener("click", submitAnswer);
+
+  btnSkip.addEventListener("click", () => {
+    // Stop any active recording and move to next
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      isRecording = false;
+    }
+    if (currentQ < questions.length - 1) {
+      currentQ++;
+      updateQuestion();
+    }
+  });
+
+  btnDownload.addEventListener("click", () => {
+    window.print();
+  });
+
+  // Initialize: start using Web Speech API — no server transcribe
+  // Note: MediaRecorder is retained but not used for transcription
+  // Init microphone audio meter for feedback (does not send audio to server)
+  initAudioMeter();
+  updateQuestion();
+  renderResume();
+
+  async function initAudioMeter() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      sourceNode = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      sourceNode.connect(analyser);
+      updateMeter();
+    } catch (err) {
+      console.warn("initAudioMeter failed", err);
+    }
+  }
+</script>
+
+</body>
+</html>

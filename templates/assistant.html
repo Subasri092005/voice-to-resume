@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume AI — Voice Resume Builder</title>
+  <meta name="description"
+    content="Build your professional resume entirely by voice. Accessible resume builder for everyone." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/assistant.css') }}">
+</head>
+
+<body>
+
+  <!-- Accessibility toolbar -->
+  <div class="a11y-bar" role="toolbar" aria-label="Accessibility controls">
+    <span class="a11y-label">Accessibility</span>
+    <button id="btn-contrast" class="a11y-btn" title="Toggle high contrast" aria-pressed="false">
+      ◑ Contrast
+    </button>
+    <button id="btn-font-dec" class="a11y-btn" title="Decrease font size" aria-label="Decrease font size">A−</button>
+    <button id="btn-font-inc" class="a11y-btn" title="Increase font size" aria-label="Increase font size">A+</button>
+    <button id="btn-replay" class="a11y-btn" title="Replay last question" aria-label="Replay last question">🔊
+      Replay</button>
+  </div>
+
+  <div class="app-shell" id="app-shell">
+
+    <!-- Sidebar progress -->
+    <aside class="sidebar" aria-label="Resume building progress">
+      <div class="sidebar-brand">
+        <div class="brand-icon">📄</div>
+        <div class="brand-name">Resume<span class="brand-ai">AI</span></div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-pct" id="progress-pct">0% complete</div>
+      <nav class="step-list" id="step-list" aria-label="Conversation steps">
+        <!-- Dynamically populated -->
+      </nav>
+    </aside>
+
+    <!-- Main area -->
+    <main class="main" role="main">
+
+      <!-- Chat -->
+      <div class="chat-scroll" id="chat-scroll">
+        <div class="chat-messages" id="messages" aria-live="assertive" aria-label="Conversation" role="log"></div>
+      </div>
+
+      <!-- Template cards (shown during template step) -->
+      <div class="template-picker" id="template-picker" style="display:none;" role="group"
+        aria-label="Choose resume template">
+        <div class="tp-cards">
+          <button class="tp-card" id="tp-modern" data-template="modern" aria-label="Template 1: Modern">
+            <div class="tp-preview" style="background:linear-gradient(135deg,#0066cc,#004499)">
+              <div class="tp-preview-name">John Doe</div>
+              <div class="tp-preview-bar"></div>
+              <div class="tp-preview-lines">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="tp-info">
+              <div class="tp-number">1</div>
+              <div class="tp-name">Modern</div>
+              <div class="tp-desc">Blue gradient, skill badges</div>
+            </div>
+          </button>
+          <button class="tp-card" id="tp-classic" data-template="classic" aria-label="Template 2: Classic">
+            <div class="tp-preview" style="background:#f5f5f5;border:1px solid #ddd">
+              <div class="tp-preview-name" style="color:#111;border-bottom:2px solid #111">John Doe</div>
+              <div class="tp-preview-lines">
+                <span style="background:#555"></span><span style="background:#555"></span><span
+                  style="background:#555"></span>
+              </div>
+            </div>
+            <div class="tp-info">
+              <div class="tp-number">2</div>
+              <div class="tp-name">Classic</div>
+              <div class="tp-desc">Traditional &amp; professional</div>
+            </div>
+          </button>
+          <button class="tp-card" id="tp-minimal" data-template="minimal" aria-label="Template 3: Minimal">
+            <div class="tp-preview" style="background:#fafafa">
+              <div class="tp-preview-name" style="color:#1a1a1a">John Doe</div>
+              <div style="width:36px;height:3px;background:#00897B;margin:6px 8px;border-radius:2px"></div>
+              <div class="tp-preview-lines">
+                <span style="background:#00897B;opacity:.5"></span><span style="background:#aaa"></span><span
+                  style="background:#aaa"></span>
+              </div>
+            </div>
+            <div class="tp-info">
+              <div class="tp-number">3</div>
+              <div class="tp-name">Minimal</div>
+              <div class="tp-desc">Clean, teal accent lines</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Resume preview -->
+      <div class="resume-panel" id="resume-panel" style="display:none">
+        <div class="resume-panel-header">
+          <h2>✅ Your Resume is Ready!</h2>
+          <div class="resume-actions">
+            <button id="btn-print" class="btn-action btn-primary">🖨️ Print / Save PDF</button>
+            <button id="btn-restart" class="btn-action btn-secondary">🔄 Start Over</button>
+          </div>
+        </div>
+        <div class="resume-frame-wrap">
+          <iframe id="resume-frame" title="Your resume preview" tabindex="0"></iframe>
+        </div>
+      </div>
+
+      <!-- Input area -->
+      <div class="input-area" id="input-area">
+        <!-- Waveform (shown while listening) -->
+        <div class="waveform" id="waveform" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+
+        <div class="input-row">
+          <!-- Text input fallback -->
+          <div class="text-input-wrap">
+            <input type="text" id="text-input" class="text-input" placeholder="Or type your answer here…"
+              aria-label="Type your answer" autocomplete="off" />
+            <button id="send-btn" class="send-btn" aria-label="Send answer" title="Send">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Mic button -->
+          <button id="mic-btn" class="mic-btn" aria-label="Tap to speak" disabled>
+            <span class="mic-icon">🎤</span>
+            <span class="mic-ring"></span>
+          </button>
+        </div>
+        <div class="input-hint" id="input-hint" aria-live="polite">Starting conversation…</div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════
+    //  CONFIG & STATE
+    // ══════════════════════════════════════════════
+    const API = "";
+
+    // Voice input strategy:
+    //   "browser"  — Web Speech API (free, in-browser, Chrome/Edge)
+    //   "whisper"  — MediaRecorder → POST /transcribe → Groq Whisper
+    //   "none"     — no voice at all, text-only
+    let voiceMode = "none";
+
+    let sessionId = null;
+    let currentStep = null;
+    let recognizing = false;
+    let aiSpeaking = false;
+    let lastAIText = "";
+    let fontScale = 1;
+    let resumeData = null;
+
+    // MediaRecorder state (for Whisper path)
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let micStream = null;
+
+    // Step labels & icons for sidebar
+    const STEP_META = {
+      greeting: { icon: "👋", label: "Welcome" },
+      template: { icon: "🎨", label: "Template" },
+      name: { icon: "👤", label: "Name" },
+      contact: { icon: "📧", label: "Contact" },
+      linkedin: { icon: "🔗", label: "LinkedIn" },
+      github: { icon: "💻", label: "GitHub" },
+      job_role: { icon: "💼", label: "Job Role" },
+      summary: { icon: "📝", label: "Summary" },
+      skills: { icon: "🛠️", label: "Skills" },
+      experience: { icon: "🏢", label: "Experience" },
+      education: { icon: "🎓", label: "Education" },
+      projects: { icon: "🚀", label: "Projects" },
+      certifications: { icon: "🏅", label: "Certs" },
+      additional: { icon: "⭐", label: "Extras" },
+      preview: { icon: "👀", label: "Preview" },
+      done: { icon: "✅", label: "Done" },
+    };
+    const STEP_ORDER = Object.keys(STEP_META);
+    let completedSteps = new Set();
+
+    // DOM refs
+    const messagesEl = document.getElementById("messages");
+    const micBtn = document.getElementById("mic-btn");
+    const sendBtn = document.getElementById("send-btn");
+    const textInput = document.getElementById("text-input");
+    const inputHint = document.getElementById("input-hint");
+    const waveform = document.getElementById("waveform");
+    const templatePicker = document.getElementById("template-picker");
+    const resumePanel = document.getElementById("resume-panel");
+    const resumeFrame = document.getElementById("resume-frame");
+    const progressFill = document.getElementById("progress-fill");
+    const progressPct = document.getElementById("progress-pct");
+    const stepList = document.getElementById("step-list");
+
+
+    // ══════════════════════════════════════════════
+    //  SIDEBAR
+    // ══════════════════════════════════════════════
+    function buildSidebar() {
+      stepList.innerHTML = "";
+      STEP_ORDER.forEach(id => {
+        const meta = STEP_META[id];
+        const el = document.createElement("div");
+        el.className = "step-item";
+        el.dataset.step = id;
+        el.setAttribute("role", "listitem");
+        el.innerHTML = `<span class="step-icon">${meta.icon}</span><span class="step-label">${meta.label}</span>`;
+        stepList.appendChild(el);
+      });
+    }
+
+    function updateSidebar(activeId) {
+      stepList.querySelectorAll(".step-item").forEach(el => {
+        const id = el.dataset.step;
+        el.classList.remove("active", "done");
+        if (id === activeId) el.classList.add("active");
+        else if (completedSteps.has(id)) el.classList.add("done");
+      });
+      const total = STEP_ORDER.length;
+      const doneIdx = Math.max(0, STEP_ORDER.indexOf(activeId));
+      const pct = Math.round((doneIdx / (total - 1)) * 100);
+      progressFill.style.width = pct + "%";
+      progressPct.textContent = pct + "% complete";
+    }
+
+
+    // ══════════════════════════════════════════════
+    //  MESSAGES
+    // ══════════════════════════════════════════════
+    function addMessage(text, sender) {
+      const wrap = document.createElement("div");
+      wrap.className = `msg msg-${sender}`;
+      if (sender === "ai") {
+        wrap.innerHTML = `
+      <div class="msg-avatar">🤖</div>
+      <div class="msg-body"><div class="msg-bubble ai-bubble">${text}</div></div>
+    `;
+      } else {
+        wrap.innerHTML = `
+      <div class="msg-body"><div class="msg-bubble user-bubble">${text}</div></div>
+      <div class="msg-avatar user-avatar">🧑</div>
+    `;
+      }
+      messagesEl.appendChild(wrap);
+      setTimeout(() => { document.getElementById("chat-scroll").scrollTop = 99999; }, 50);
+    }
+
+    function addTypingIndicator() {
+      const wrap = document.createElement("div");
+      wrap.className = "msg msg-ai typing-msg";
+      wrap.id = "typing-indicator";
+      wrap.innerHTML = `
+    <div class="msg-avatar">🤖</div>
+    <div class="msg-body">
+      <div class="msg-bubble ai-bubble typing-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+      messagesEl.appendChild(wrap);
+      document.getElementById("chat-scroll").scrollTop = 99999;
+    }
+
+    function removeTypingIndicator() {
+      const el = document.getElementById("typing-indicator");
+      if (el) el.remove();
+    }
+
+
+    // ══════════════════════════════════════════════
+    //  TTS
+    // ══════════════════════════════════════════════
+    function speak(text) {
+      if (!text) return;
+      lastAIText = text;
+      aiSpeaking = true;
+      micBtn.disabled = true;
+      setHint("AI is speaking…");
+
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 0.92;
+      utter.pitch = 1;
+      utter.lang = "en-US";
+
+      utter.onend = () => {
+        aiSpeaking = false;
+        if (currentStep && currentStep !== "preview" && currentStep !== "done") {
+          micBtn.disabled = false;
+          setHint("Press the mic button or type your answer");
+          setTimeout(startVoiceInput, 600);
+        }
+      };
+      utter.onerror = () => {
+        aiSpeaking = false;
+        micBtn.disabled = false;
+        setHint("Press the mic button or type your answer");
+      };
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    }
+
+    function setHint(text) { inputHint.textContent = text; }
+
+
+    // ══════════════════════════════════════════════
+    //  VOICE INPUT — detects best mode on startup
+    // ══════════════════════════════════════════════
+
+    // ── Browser Web Speech API (primary — free, no server) ──
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognizer = null;
+
+    function setupBrowserSR() {
+      recognizer = new SR();
+      recognizer.lang = "en-US";
+      recognizer.continuous = false;
+      recognizer.interimResults = false;
+      recognizer.maxAlternatives = 1;
+
+      recognizer.onstart = () => {
+        recognizing = true;
+        micBtn.classList.add("listening");
+        waveform.classList.add("active");
+        setHint("Listening… speak now");
+      };
+      recognizer.onend = () => {
+        recognizing = false;
+        micBtn.classList.remove("listening");
+        waveform.classList.remove("active");
+        if (!aiSpeaking) setHint("Press the mic button or type your answer");
+      };
+      recognizer.onerror = e => {
+        recognizing = false;
+        micBtn.classList.remove("listening");
+        waveform.classList.remove("active");
+        if (e.error === "no-speech") {
+          setHint("No speech detected. Tap mic to try again.");
+        } else if (e.error === "not-allowed") {
+          setHint("Mic blocked. Switching to Whisper mode…");
+          voiceMode = "none";
+          micBtn.disabled = true;
+        } else {
+          setHint("Voice error. Please type your answer.");
+        }
+      };
+      recognizer.onresult = event => {
+        const transcript = event.results[0][0].transcript.trim();
+        submitAnswer(transcript);
+      };
+    }
+
+    // ── Groq Whisper path (fallback — records audio → POST /transcribe) ──
+    async function setupWhisperMode() {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        voiceMode = "whisper";
+        micBtn.disabled = false;
+        setHint("Press the mic button or type your answer");
+        console.log("[VOICE] Using Groq Whisper mode");
+      } catch {
+        voiceMode = "none";
+        micBtn.disabled = true;
+        setHint("Mic not available — please type your answers.");
+      }
+    }
+
+    function initVoiceMode() {
+      if (SR) {
+        try {
+          recognizer = new SR();
+          voiceMode = "browser";
+          setupBrowserSR();
+          micBtn.disabled = false;
+          console.log("[VOICE] Using Browser Web Speech API");
+        } catch {
+          setupWhisperMode();
+        }
+      } else {
+        // No browser SpeechRecognition — try Groq Whisper
+        setupWhisperMode();
+      }
+    }
+
+    // ── Unified start/stop ──
+    function startVoiceInput() {
+      if (aiSpeaking) return;
+      if (voiceMode === "browser" && recognizer && !recognizing) {
+        try { recognizer.start(); } catch (e) { console.warn("SR start error", e); }
+      } else if (voiceMode === "whisper" && !isRecording) {
+        startWhisperRecording();
+      }
+    }
+
+    function stopVoiceInput() {
+      if (voiceMode === "browser" && recognizer && recognizing) {
+        recognizer.stop();
+      } else if (voiceMode === "whisper" && isRecording) {
+        stopWhisperRecording();
+      }
+    }
+
+    // ── Whisper recording mechanics ──
+    function startWhisperRecording() {
+      if (!micStream) return;
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(micStream);
+
+      mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        isRecording = false;
+        micBtn.classList.remove("listening");
+        waveform.classList.remove("active");
+        setHint("Transcribing with Groq Whisper…");
+        micBtn.disabled = true;
+
+        const blob = new Blob(audioChunks, { type: "audio/webm" });
+        await sendAudioToWhisper(blob);
+      };
+
+      mediaRecorder.start();
+      isRecording = true;
+      micBtn.classList.add("listening");
+      waveform.classList.add("active");
+      setHint("Recording… tap mic button to stop");
+    }
+
+    function stopWhisperRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+      }
+    }
+
+    async function sendAudioToWhisper(blob) {
+      try {
+        const formData = new FormData();
+        formData.append("file", blob, "recording.webm");
+        if (currentStep) formData.append("field", currentStep);
+
+        const res = await fetch(`${API}/transcribe`, { method: "POST", body: formData });
+        const data = await res.json();
+
+        if (data.error) {
+          setHint(`Transcription error: ${data.error}. Please type your answer.`);
+          micBtn.disabled = false;
+          return;
+        }
+
+        const text = (data.text || "").trim();
+        if (text) {
+          submitAnswer(text);
+        } else {
+          setHint("Couldn't hear anything. Please try again or type.");
+          micBtn.disabled = false;
+        }
+      } catch (e) {
+        console.error("[WHISPER ERROR]", e);
+        setHint("Transcription failed. Please type your answer.");
+        micBtn.disabled = false;
+      }
+    }
+
+
+    // ══════════════════════════════════════════════
+    //  TEMPLATE PICKER
+    // ══════════════════════════════════════════════
+    function showTemplatePicker() {
+      templatePicker.style.display = "block";
+      document.querySelectorAll(".tp-card").forEach(c => c.classList.remove("selected"));
+    }
+
+    function hideTemplatePicker() {
+      templatePicker.style.display = "none";
+    }
+
+    document.querySelectorAll(".tp-card").forEach(card => {
+      card.addEventListener("click", () => {
+        const tmpl = card.dataset.template;
+        document.querySelectorAll(".tp-card").forEach(c => c.classList.remove("selected"));
+        card.classList.add("selected");
+        const nameMap = { modern: "one", classic: "two", minimal: "three" };
+        setTimeout(() => {
+          hideTemplatePicker();
+          submitAnswer(`I choose ${nameMap[tmpl] || tmpl}`);
+        }, 400);
+      });
+    });
+
+
+    // ══════════════════════════════════════════════
+    //  CONVERSATION FLOW
+    // ══════════════════════════════════════════════
+    async function initConversation() {
+      micBtn.disabled = true;
+      setHint("Starting conversation…");
+      buildSidebar();
+      try {
+        const res = await fetch(`${API}/conversation/init`);
+        const j = await res.json();
+        sessionId = j.session_id;
+        currentStep = j.step_id;
+        resumeData = j.data;
+        updateSidebar(j.step_id);
+        addMessage(j.question, "ai");
+        speak(j.question);
+      } catch (e) {
+        console.error(e);
+        addMessage("Sorry, couldn't connect to the server. Please refresh.", "ai");
+      }
+    }
+
+    async function submitAnswer(text) {
+      if (!sessionId || !text.trim()) return;
+
+      addMessage(text, "user");
+      micBtn.disabled = true;
+      sendBtn.disabled = true;
+      textInput.value = "";
+      setHint("Processing with Groq AI…");
+
+      if (currentStep) completedSteps.add(currentStep);
+      addTypingIndicator();
+
+      try {
+        const res = await fetch(`${API}/conversation/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, text }),
+        });
+        const j = await res.json();
+        removeTypingIndicator();
+
+        currentStep = j.step_id;
+        resumeData = j.data;
+        updateSidebar(j.step_id);
+
+        if (j.step_id === "preview") {
+          addMessage(j.question, "ai");
+          speak(j.question);
+          await generateResume(j.data);
+        } else if (j.step_id === "done") {
+          addMessage(j.question, "ai");
+          speak(j.question);
+          completedSteps.add("done");
+          updateSidebar("done");
+          setHint("Your resume is ready! Use the Print / Save PDF button.");
+          micBtn.disabled = true;
+        } else {
+          setTimeout(() => {
+            if (j.step_id === "template") showTemplatePicker();
+            addMessage(j.question, "ai");
+            speak(j.question);
+          }, 300);
+        }
+
+        sendBtn.disabled = false;
+      } catch (e) {
+        removeTypingIndicator();
+        console.error(e);
+        addMessage("Something went wrong. Please try again.", "ai");
+        speak("Something went wrong. Please try again.");
+        sendBtn.disabled = false;
+        micBtn.disabled = false;
+      }
+    }
+
+    async function generateResume(data) {
+      try {
+        const res = await fetch(`${API}/resume/preview`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const j = await res.json();
+        const doc = resumeFrame.contentDocument || resumeFrame.contentWindow.document;
+        doc.open();
+        doc.write(j.html);
+        doc.close();
+        resumePanel.style.display = "block";
+        setTimeout(() => resumePanel.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
+      } catch (e) {
+        console.error(e);
+        addMessage("Could not generate preview. Please try again.", "ai");
+      }
+    }
+
+
+    // ══════════════════════════════════════════════
+    //  MIC BUTTON — unified handler
+    // ══════════════════════════════════════════════
+    micBtn.addEventListener("click", () => {
+      if (aiSpeaking) {
+        window.speechSynthesis.cancel();
+        aiSpeaking = false;
+      }
+
+      if (voiceMode === "browser") {
+        if (recognizing) stopVoiceInput();
+        else startVoiceInput();
+      } else if (voiceMode === "whisper") {
+        if (isRecording) stopWhisperRecording();
+        else startWhisperRecording();
+      }
+    });
+
+
+    // ══════════════════════════════════════════════
+    //  TEXT INPUT
+    // ══════════════════════════════════════════════
+    textInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        const val = textInput.value.trim();
+        if (val) {
+          if (currentStep === "template") hideTemplatePicker();
+          submitAnswer(val);
+        }
+      }
+    });
+
+    sendBtn.addEventListener("click", () => {
+      const val = textInput.value.trim();
+      if (val) {
+        if (currentStep === "template") hideTemplatePicker();
+        submitAnswer(val);
+      }
+    });
+
+
+    // ══════════════════════════════════════════════
+    //  EXPORT / PRINT
+    // ══════════════════════════════════════════════
+    document.getElementById("btn-print").addEventListener("click", () => {
+      if (resumeFrame.contentWindow) resumeFrame.contentWindow.print();
+    });
+
+    document.getElementById("btn-restart").addEventListener("click", () => {
+      if (confirm("Start over? Your current resume data will be lost.")) location.reload();
+    });
+
+
+    // ══════════════════════════════════════════════
+    //  ACCESSIBILITY
+    // ══════════════════════════════════════════════
+    document.getElementById("btn-replay").addEventListener("click", () => {
+      if (lastAIText) speak(lastAIText);
+    });
+
+    const btnContrast = document.getElementById("btn-contrast");
+    btnContrast.addEventListener("click", () => {
+      const on = document.body.classList.toggle("high-contrast");
+      btnContrast.setAttribute("aria-pressed", on.toString());
+      btnContrast.classList.toggle("active", on);
+    });
+
+    document.getElementById("btn-font-dec").addEventListener("click", () => {
+      fontScale = Math.max(0.8, fontScale - 0.1);
+      document.documentElement.style.setProperty("--font-scale", fontScale);
+    });
+    document.getElementById("btn-font-inc").addEventListener("click", () => {
+      fontScale = Math.min(1.5, fontScale + 0.1);
+      document.documentElement.style.setProperty("--font-scale", fontScale);
+    });
+
+
+    // ══════════════════════════════════════════════
+    //  INIT
+    // ══════════════════════════════════════════════
+    window.addEventListener("load", async () => {
+      initVoiceMode();
+      await initConversation();
+    });
+  </script>
+</body>
+
+</html>
