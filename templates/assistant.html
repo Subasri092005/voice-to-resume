@@ -24,6 +24,11 @@
     <button id="btn-font-inc" class="a11y-btn" title="Increase font size" aria-label="Increase font size">A+</button>
     <button id="btn-replay" class="a11y-btn" title="Replay last question" aria-label="Replay last question">🔊
       Replay</button>
+    <span class="a11y-divider"></span>
+    <button id="btn-lang" class="a11y-btn lang-btn" title="Switch language: English / Tamil"
+      aria-label="Switch speech language">
+      🌐 EN
+    </button>
   </div>
 
   <div class="app-shell" id="app-shell">
@@ -122,6 +127,11 @@
           <span></span><span></span><span></span><span></span><span></span>
           <span></span><span></span><span></span><span></span><span></span>
         </div>
+        <!-- Live transcript preview (shown during speech recognition) -->
+        <div class="live-transcript" id="live-transcript" style="display:none" aria-live="polite">
+          <span class="live-label">Hearing:</span>
+          <span class="live-text" id="live-text"></span>
+        </div>
 
         <div class="input-row">
           <!-- Text input fallback -->
@@ -169,6 +179,9 @@
     let fontScale = 1;
     let resumeData = null;
 
+    // Language setting: "en-US" or "ta-IN" (Tamil)
+    let speechLang = "en-US";
+
     // MediaRecorder state (for Whisper path)
     let mediaRecorder = null;
     let audioChunks = [];
@@ -180,7 +193,8 @@
       greeting: { icon: "👋", label: "Welcome" },
       template: { icon: "🎨", label: "Template" },
       name: { icon: "👤", label: "Name" },
-      contact: { icon: "📧", label: "Contact" },
+      email: { icon: "📧", label: "Email" },
+      phone: { icon: "📞", label: "Phone" },
       linkedin: { icon: "🔗", label: "LinkedIn" },
       github: { icon: "💻", label: "GitHub" },
       job_role: { icon: "💼", label: "Job Role" },
@@ -210,6 +224,8 @@
     const progressFill = document.getElementById("progress-fill");
     const progressPct = document.getElementById("progress-pct");
     const stepList = document.getElementById("step-list");
+    const liveTranscript = document.getElementById("live-transcript");
+    const liveText = document.getElementById("live-text");
 
 
     // ══════════════════════════════════════════════
@@ -289,7 +305,7 @@
     // ══════════════════════════════════════════════
     //  TTS
     // ══════════════════════════════════════════════
-    function speak(text) {
+    function speak(text, onDone) {
       if (!text) return;
       lastAIText = text;
       aiSpeaking = true;
@@ -297,22 +313,26 @@
       setHint("AI is speaking…");
 
       const utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 0.92;
+      utter.rate = 0.95;
       utter.pitch = 1;
-      utter.lang = "en-US";
+      utter.lang = speechLang === "ta-IN" ? "ta-IN" : "en-US";
 
       utter.onend = () => {
         aiSpeaking = false;
+        if (onDone) { onDone(); return; }
         if (currentStep && currentStep !== "preview" && currentStep !== "done") {
           micBtn.disabled = false;
-          setHint("Press the mic button or type your answer");
-          setTimeout(startVoiceInput, 600);
+          setHint("Listening… speak now");
+          // Auto-start voice input after AI finishes speaking (only if not already recognizing)
+          setTimeout(() => { if (!recognizing && !aiSpeaking) startVoiceInput(); }, 700);
         }
       };
       utter.onerror = () => {
         aiSpeaking = false;
         micBtn.disabled = false;
-        setHint("Press the mic button or type your answer");
+        if (onDone) { onDone(); return; }
+        setHint("Listening… speak now");
+        setTimeout(() => { if (!recognizing && !aiSpeaking) startVoiceInput(); }, 700);
       };
 
       window.speechSynthesis.cancel();
@@ -320,6 +340,8 @@
     }
 
     function setHint(text) { inputHint.textContent = text; }
+
+    // (Confirmation flow removed — answers are submitted directly for faster, smoother interaction)
 
 
     // ══════════════════════════════════════════════
@@ -330,42 +352,86 @@
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognizer = null;
 
+    // Silence timer: how long to wait after last speech event before auto-submitting
+    const SILENCE_MS = 1500;
+    let silenceTimer = null;
+    let accumulatedTranscript = "";
+
+    function resetSilenceTimer() {
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        // User has been silent for SILENCE_MS — stop listening and submit
+        if (recognizing) {
+          try { recognizer.stop(); } catch (e) { }
+        }
+      }, SILENCE_MS);
+    }
+
     function setupBrowserSR() {
       recognizer = new SR();
-      recognizer.lang = "en-US";
-      recognizer.continuous = false;
-      recognizer.interimResults = false;
-      recognizer.maxAlternatives = 1;
+      recognizer.lang = speechLang;
+      recognizer.continuous = true;       // Keep listening until silence timer fires
+      recognizer.interimResults = true;
 
       recognizer.onstart = () => {
         recognizing = true;
+        accumulatedTranscript = "";
+        clearTimeout(silenceTimer);
         micBtn.classList.add("listening");
         waveform.classList.add("active");
-        setHint("Listening… speak now");
+        liveTranscript.style.display = "flex";
+        liveText.textContent = "";
+        setHint("Listening… speak now (tap mic when done)");
       };
       recognizer.onend = () => {
         recognizing = false;
+        clearTimeout(silenceTimer);
         micBtn.classList.remove("listening");
         waveform.classList.remove("active");
-        if (!aiSpeaking) setHint("Press the mic button or type your answer");
+        liveTranscript.style.display = "none";
+        // Submit whatever was accumulated
+        const heard = accumulatedTranscript.trim();
+        accumulatedTranscript = "";
+        if (heard) {
+          if (currentStep === "template") hideTemplatePicker();
+          submitAnswer(heard);
+        } else if (!aiSpeaking) {
+          setHint("Press the mic button or type your answer");
+        }
       };
       recognizer.onerror = e => {
         recognizing = false;
+        clearTimeout(silenceTimer);
         micBtn.classList.remove("listening");
         waveform.classList.remove("active");
-        if (e.error === "no-speech") {
-          setHint("No speech detected. Tap mic to try again.");
-        } else if (e.error === "not-allowed") {
-          setHint("Mic blocked. Switching to Whisper mode…");
+        liveTranscript.style.display = "none";
+        accumulatedTranscript = "";
+        if (e.error === "not-allowed") {
+          setHint("Mic blocked. Please type your answer.");
           voiceMode = "none";
           micBtn.disabled = true;
+        } else if (e.error === "aborted") {
+          // Aborted intentionally (e.g. language switch), ignore
         } else {
-          setHint("Voice error. Please type your answer.");
+          if (!aiSpeaking) setHint("Voice error — tap mic to try again");
+          console.warn("[SR Error]", e.error);
         }
       };
       recognizer.onresult = event => {
-        const transcript = event.results[0][0].transcript.trim();
-        submitAnswer(transcript);
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            accumulatedTranscript += transcript + " ";
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        // Show live preview
+        liveText.textContent = (accumulatedTranscript + interimTranscript).trim();
+        liveTranscript.style.display = "flex";
+        // Reset the silence timer on every new speech event
+        resetSilenceTimer();
       };
     }
 
@@ -387,9 +453,8 @@
     function initVoiceMode() {
       if (SR) {
         try {
-          recognizer = new SR();
           voiceMode = "browser";
-          setupBrowserSR();
+          setupBrowserSR();  // creates recognizer internally
           micBtn.disabled = false;
           console.log("[VOICE] Using Browser Web Speech API");
         } catch {
@@ -401,10 +466,22 @@
       }
     }
 
+    // Recreate the recognizer when language changes so the new lang takes effect cleanly
+    function reinitRecognizer() {
+      if (voiceMode !== "browser" || !SR) return;
+      if (recognizing) {
+        try { recognizer.stop(); } catch (e) { }
+        recognizing = false;
+      }
+      setupBrowserSR();
+    }
+
     // ── Unified start/stop ──
     function startVoiceInput() {
       if (aiSpeaking) return;
       if (voiceMode === "browser" && recognizer && !recognizing) {
+        // Update language in case user toggled it
+        recognizer.lang = speechLang;
         try { recognizer.start(); } catch (e) { console.warn("SR start error", e); }
       } else if (voiceMode === "whisper" && !isRecording) {
         startWhisperRecording();
@@ -458,27 +535,33 @@
         const formData = new FormData();
         formData.append("file", blob, "recording.webm");
         if (currentStep) formData.append("field", currentStep);
+        if (sessionId) formData.append("session_id", sessionId);
+        // Include language as fallback if session_id not available
+        formData.append("language", speechLang === "ta-IN" ? "ta" : "en");
 
         const res = await fetch(`${API}/transcribe`, { method: "POST", body: formData });
         const data = await res.json();
 
         if (data.error) {
-          setHint(`Transcription error: ${data.error}. Please type your answer.`);
+          setHint(`Transcription error. Listening again…`);
           micBtn.disabled = false;
+          setTimeout(startVoiceInput, 1000);
           return;
         }
 
         const text = (data.text || "").trim();
         if (text) {
+          if (currentStep === "template") hideTemplatePicker();
           submitAnswer(text);
         } else {
-          setHint("Couldn't hear anything. Please try again or type.");
+          setHint("Couldn't hear anything. Tap mic to try again.");
           micBtn.disabled = false;
         }
       } catch (e) {
         console.error("[WHISPER ERROR]", e);
-        setHint("Transcription failed. Please type your answer.");
+        setHint("Transcription failed. Listening again…");
         micBtn.disabled = false;
+        setTimeout(startVoiceInput, 1000);
       }
     }
 
@@ -522,6 +605,23 @@
         sessionId = j.session_id;
         currentStep = j.step_id;
         resumeData = j.data;
+
+        // Sync language from server if provided
+        if (j.language) {
+          const serverLang = j.language === "ta" ? "ta-IN" : "en-US";
+          if (serverLang !== speechLang) {
+            speechLang = serverLang;
+            const btnLang = document.getElementById("btn-lang");
+            if (serverLang === "ta-IN") {
+              btnLang.textContent = "🌐 TA";
+              btnLang.classList.add("active");
+            } else {
+              btnLang.textContent = "🌐 EN";
+              btnLang.classList.remove("active");
+            }
+          }
+        }
+
         updateSidebar(j.step_id);
         addMessage(j.question, "ai");
         speak(j.question);
@@ -555,6 +655,24 @@
         currentStep = j.step_id;
         resumeData = j.data;
         updateSidebar(j.step_id);
+
+        // SYNC language with server — if server language changed, update frontend
+        if (j.language) {
+          const serverLang = j.language === "ta" ? "ta-IN" : "en-US";
+          if (serverLang !== speechLang) {
+            speechLang = serverLang;
+            const btnLang = document.getElementById("btn-lang");
+            if (serverLang === "ta-IN") {
+              btnLang.textContent = "🌐 TA";
+              btnLang.classList.add("active");
+              console.log("[LANG SYNC] Synced to Tamil");
+            } else {
+              btnLang.textContent = "🌐 EN";
+              btnLang.classList.remove("active");
+              console.log("[LANG SYNC] Synced to English");
+            }
+          }
+        }
 
         if (j.step_id === "preview") {
           addMessage(j.question, "ai");
@@ -629,23 +747,23 @@
     // ══════════════════════════════════════════════
     //  TEXT INPUT
     // ══════════════════════════════════════════════
+    function handleTextSubmit() {
+      const val = textInput.value.trim();
+      if (!val) return;
+      if (currentStep === "template") hideTemplatePicker();
+      textInput.value = "";
+      submitAnswer(val);
+    }
+
     textInput.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        const val = textInput.value.trim();
-        if (val) {
-          if (currentStep === "template") hideTemplatePicker();
-          submitAnswer(val);
-        }
+        handleTextSubmit();
       }
     });
 
     sendBtn.addEventListener("click", () => {
-      const val = textInput.value.trim();
-      if (val) {
-        if (currentStep === "template") hideTemplatePicker();
-        submitAnswer(val);
-      }
+      handleTextSubmit();
     });
 
 
@@ -682,6 +800,76 @@
     document.getElementById("btn-font-inc").addEventListener("click", () => {
       fontScale = Math.min(1.5, fontScale + 0.1);
       document.documentElement.style.setProperty("--font-scale", fontScale);
+    });
+
+    // Language toggle: EN ↔ Tamil (with server sync)
+    const btnLang = document.getElementById("btn-lang");
+    btnLang.addEventListener("click", async () => {
+      const oldLang = speechLang;
+      const newServerLang = speechLang === "en-US" ? "ta" : "en";
+      const newSpeechLang = newServerLang === "ta" ? "ta-IN" : "en-US";
+
+      // Update frontend speech language immediately
+      speechLang = newSpeechLang;
+      // Recreate recognizer with new language so it works cleanly
+      reinitRecognizer();
+
+      // Update button UI
+      if (newServerLang === "ta") {
+        btnLang.textContent = "🌐 TA";
+        btnLang.classList.add("active");
+      } else {
+        btnLang.textContent = "🌐 EN";
+        btnLang.classList.remove("active");
+      }
+
+      // Sync with server: update session language and get current question in new language
+      if (sessionId && currentStep && currentStep !== "done") {
+        try {
+          const res = await fetch(`${API}/conversation/set-language`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId, language: newServerLang }),
+          });
+          const j = await res.json();
+
+          if (j.question) {
+            // Remove old question from chat and re-ask in new language
+            if (messagesEl.lastChild && messagesEl.lastChild.classList.contains("msg-ai")) {
+              messagesEl.lastChild.remove();
+            }
+
+            // Add language switch message
+            const notifyMsg = newServerLang === "ta"
+              ? "English থেকে Tamil এ স্যুইচ করা হয়েছে. এখন Tamil এ প্রশ্ন জিজ্ঞাস করা হবে."
+              : "Tamil থেকে English এ স্যুইচ করা হয়েছে. এখন English এ প্রশ্ন জিজ্ঞাস করা হবে.";
+
+            // Re-ask the current question in the new language
+            addMessage(j.question, "ai");
+            speak(j.question);
+
+            console.log(`[LANG SWITCH] Changed from ${oldLang} to ${newSpeechLang}, server synced`);
+          }
+        } catch (e) {
+          console.error("[LANG SWITCH ERROR]", e);
+          // Revert speech language on error
+          speechLang = oldLang;
+          if (oldLang === "ta-IN") {
+            btnLang.textContent = "🌐 TA";
+            btnLang.classList.add("active");
+          } else {
+            btnLang.textContent = "🌐 EN";
+            btnLang.classList.remove("active");
+          }
+        }
+      } else {
+        // If not in conversation yet, just show a message
+        const msg = newServerLang === "ta"
+          ? "வணக்கம்! இப்போது தமிழ் மொழিতে பேச முடியும்."
+          : "Hello! You can now speak in English.";
+        addMessage(msg, "ai");
+        speak(msg);
+      }
     });
 
 

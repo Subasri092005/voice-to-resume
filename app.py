@@ -35,61 +35,142 @@ FIELD_PROMPTS = {
         "schema": '{"name": "<First Last>"}',
         "instruction": (
             "Extract the person's full name from the spoken text. "
-            "Return only the name in title case, max 3 words. "
-            "Remove phrases like 'my name is', 'I am', 'this is'. "
+            "Return only the name in title case, max 4 words. "
+            "Remove ALL filler: 'my name is', 'I am', 'this is', 'myself', 'I'm called', 'hey', 'hi'. "
+            "IMPORTANT: Preserve the EXACT name even if it sounds unusual. "
+            "Indian names, non-English names, and uncommon spellings must be kept as spoken. "
+            "Examples: 'my name is Subasri' → 'Subasri', 'I am Parvathi Devi' → 'Parvathi Devi', "
+            "'myself Rahul Kumar' → 'Rahul Kumar', 'hi my name is Arun' → 'Arun'. "
+            "Do NOT autocorrect or change the name to a more common English name. "
         ),
     },
-    "contact": {
-        "schema": '{"email": "example@domain.com", "phone": "+91XXXXXXXXXX"}',
+    "email": {
+        "schema": '{"email": "example@domain.com"}',
         "instruction": (
-            "Extract the email and phone number from the spoken text. "
-            "The user may say 'dot' instead of '.', 'at' instead of '@', 'underscore' instead of '_'. "
-            "Convert spoken email like 'john dot doe at gmail dot com' to 'john.doe@gmail.com'. "
-            "The phone should contain only digits and an optional leading '+'. "
-            "If email or phone is not found, return an empty string for that field. "
+            "Extract ONLY the email address from the spoken text. "
+            "RULES: "
+            "- 'at the rate', 'at', '@' → '@' "
+            "- 'dot', 'period', 'point' → '.' "
+            "- 'underscore', 'under score' → '_' "
+            "- 'hyphen', 'dash' → '-' "
+            "Examples: "
+            "- 'john dot doe at gmail dot com' → 'john.doe@gmail.com' "
+            "- 'subasri underscore 09 at gmail dot com' → 'subasri_09@gmail.com' "
+            "- 'rahul123 at yahoo dot co dot in' → 'rahul123@yahoo.co.in' "
+            "Return ONLY the email string. If no email found, return empty string."
+        ),
+    },
+    "phone": {
+        "schema": '{"phone": "9876543210"}',
+        "instruction": (
+            "Extract ONLY the phone number digits from the spoken text. "
+            "RULES: "
+            "- Convert spoken digit words: 'nine eight seven' → '987' "
+            "- 'double nine' → '99', 'triple eight' → '888' "
+            "- 'plus nine one' at start → '+91' "
+            "- Remove ALL non-digit characters EXCEPT a leading '+' "
+            "- The user may say 'my number is 9876543210' → return '9876543210' "
+            "- The user may say 'nine double zero triple three eight two zero zero' → return '90003382000' "
+            "Return ONLY the digit string. If no phone found, return empty string."
         ),
     },
     "education": {
         "schema": '{"institution": "<university name>", "degree": "<B.Tech/M.Sc/etc>", "field": "<subject>", "cgpa": "<number>", "year": "<graduation year>"}',
         "instruction": (
-            "Extract education details from the spoken text. "
-            "Identify the institution name, degree type (B.Tech, M.Tech, B.Sc, M.Sc, BCA, MCA, MBA, Diploma, etc.), "
-            "field of study, CGPA/GPA, and graduation year. "
-            "Leave any missing fields as empty string. "
+            "Extract ONLY the key education details from the spoken text. "
+            "The user may speak in a long conversational way — IGNORE all filler words, "
+            "personal stories, and opinions. Extract ONLY: "
+            "1. Institution/university name "
+            "2. Degree type (B.Tech, M.Tech, B.Sc, M.Sc, BCA, MCA, MBA, Diploma, B.E., etc.) "
+            "3. Field of study (Computer Science, ECE, EEE, Mechanical, etc.) "
+            "4. CGPA/GPA/percentage (just the number) "
+            "5. Graduation year (just the year) "
+            "Example: 'So basically I studied at VIT university in Vellore and I did my "
+            "B.Tech in Computer Science and I graduated in 2024 with a CGPA of 8.5' "
+            "→ {\"institution\": \"VIT University\", \"degree\": \"B.Tech\", \"field\": \"Computer Science\", "
+            "\"cgpa\": \"8.5\", \"year\": \"2024\"} "
+            "Leave any genuinely missing fields as empty string. "
         ),
     },
     "skills": {
         "schema": '{"skills": ["Skill One", "Skill Two", "Skill Three"]}',
         "instruction": (
             "Extract individual technical and professional skills from the spoken text. "
+            "Return ONLY skill names — remove ALL filler like 'my skills are', 'I know', "
+            "'I am good at', 'I have experience in', 'basically', 'also'. "
             "Return each as a separate item in the list. Title case each skill. "
             "Common separators: 'and', commas, '/', '+'. "
-            "Do not include filler words like 'my skills are', 'I know'. "
+            "Example: 'So my skills are basically Python and also I know React and "
+            "I'm good at machine learning and communication' "
+            "→ [\"Python\", \"React\", \"Machine Learning\", \"Communication\"] "
         ),
     },
     "experience": {
-        "schema": '{"company": "<Company Name>", "role": "<Job Title>", "startYear": "<YYYY>", "endYear": "<YYYY or present>"}',
+        "schema": '{"role": "<Job Title>", "company": "<Company/Org Name>", "department": "<Dept/Field, if mentioned>", "startYear": "<YYYY>", "endYear": "<YYYY or present>"}',
         "instruction": (
-            "Extract work experience details from the spoken text. "
-            "Identify: company/organisation name, job title/role, start year, end year (or 'present'). "
-            "Look for patterns like 'worked as X at Y from 2021 to 2024'. "
-            "Leave missing fields as empty string. "
+            "Extract ONLY these key fields from the spoken experience. "
+            "Ignore ALL filler words, stories, and opinions. "
+            "1. Job title / role "
+            "2. Company or organization name "
+            "3. Department or field (e.g., CSE, ECE, Sales) — if mentioned, else empty "
+            "4. Start year "
+            "5. End year (or 'present' if still working) "
+            "Example: 'I have worked as assistant professor in RIT in the dept of CSE from 2020 to 2023' "
+            "→ {\"role\": \"Assistant Professor\", \"company\": \"RIT\", \"department\": \"CSE\", \"startYear\": \"2020\", \"endYear\": \"2023\"} "
+            "Example: 'Worked at TCS as software engineer since 2022' "
+            "→ {\"role\": \"Software Engineer\", \"company\": \"TCS\", \"department\": \"\", \"startYear\": \"2022\", \"endYear\": \"present\"} "
+            "Leave genuinely missing fields as empty string. "
         ),
     },
     "projects": {
-        "schema": '{"title": "<project name>", "description": "<what it does>", "tech": "<technologies used>"}',
+        "schema": '{"title": "<project name>", "description": "<1-2 sentence summary>", "tech": "<technologies used>"}',
         "instruction": (
-            "Extract project details from the spoken text. "
-            "Identify the project title, a short description of what it does, and the technologies/tools used. "
+            "Extract ONLY the key project details from the spoken text. "
+            "The user may describe the project at length — CONDENSE it: "
+            "1. Project title/name "
+            "2. A brief 1-2 sentence summary of what it does (NOT a transcript of what they said) "
+            "3. Technologies/tools used (comma separated) "
+            "Example: 'I built this really cool project called Voice Resume Builder where basically "
+            "you can speak and it builds your resume automatically. I used Python for the backend "
+            "and Flask as the framework and also JavaScript for the frontend and the Web Speech API "
+            "for voice recognition.' "
+            "→ {\"title\": \"Voice Resume Builder\", \"description\": \"A voice-powered tool that "
+            "builds professional resumes through speech input.\", "
+            "\"tech\": \"Python, Flask, JavaScript, Web Speech API\"} "
             "Leave missing fields as empty string. "
         ),
     },
     "certifications": {
         "schema": '{"certifications": ["Cert One", "Cert Two"]}',
         "instruction": (
-            "Extract certifications, courses, or credentials from the spoken text. "
-            "Return each as a separate item. "
-            "Examples: 'AWS Certified Developer', 'Google Data Analytics', 'Coursera Machine Learning'. "
+            "Extract certification/course names from the spoken text. "
+            "Remove ALL filler: 'I completed', 'I have done', 'I got certified in', 'basically'. "
+            "Return ONLY the certification names as a list. "
+            "Example: 'I completed AWS Certified Developer and also I did Google Data Analytics "
+            "from Coursera' → [\"AWS Certified Developer\", \"Google Data Analytics\"] "
+        ),
+    },
+    "summary": {
+        "schema": '{"summary": "<2-3 sentence professional summary>"}',
+        "instruction": (
+            "Convert the user's spoken self-description into a POLISHED professional summary "
+            "of 2-3 sentences suitable for a resume. "
+            "Remove filler words, repeated phrases, and informal language. "
+            "Write in third person or first person professional tone. "
+            "Example input: 'So basically I am a software developer with like 3 years experience "
+            "and I love building web apps and I'm passionate about AI and machine learning' "
+            "→ 'Passionate software developer with 3 years of experience specializing in web "
+            "application development. Skilled in AI and machine learning technologies.' "
+        ),
+    },
+    "job_role": {
+        "schema": '{"role": "<Job Title>"}',
+        "instruction": (
+            "Extract the job title or role from the spoken text. "
+            "Remove ALL filler: 'I am a', 'I work as', 'my role is', 'basically'. "
+            "Return ONLY the job title in proper format. "
+            "Example: 'I am working as a full stack developer' → 'Full Stack Developer' "
+            "Example: 'So basically I'm a data scientist' → 'Data Scientist' "
         ),
     },
     "linkedin": {
@@ -110,12 +191,58 @@ FIELD_PROMPTS = {
             "If just a username is given, format as https://github.com/username. "
         ),
     },
+    "additional": {
+        "schema": '{"value": "<cleaned text>"}',
+        "instruction": (
+            "Clean up the user's spoken text about additional information (hobbies, languages, "
+            "volunteer work, achievements). Remove filler words and present cleanly. "
+            "Example: 'So basically I speak English and Tamil and also I do volunteering at a local NGO' "
+            "→ 'Languages: English, Tamil. Volunteer work at local NGO.' "
+        ),
+    },
 }
 
 GENERIC_PROMPT = {
     "schema": '{"value": "<extracted text>"}',
     "instruction": "Clean up and return the most meaningful text from the user's spoken input.",
 }
+
+
+def translate_to_english(text: str) -> str:
+    """
+    Translate Tamil (or any non-English) text to English using Groq LLM.
+    Returns the English translation. If translation fails, returns original text.
+    """
+    if not text or not text.strip():
+        return text
+
+    try:
+        client = get_groq_client()
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a translator. Translate the given Tamil text to English. "
+                        "If the text is already in English, return it as-is. "
+                        "If the text is a mix of Tamil and English, translate only the Tamil parts. "
+                        "IMPORTANT: Preserve proper nouns, names, company names, technical terms, "
+                        "email addresses, phone numbers, and URLs exactly as they are. "
+                        "Return ONLY the translated text, nothing else. No quotes, no explanation."
+                    ),
+                },
+                {"role": "user", "content": text},
+            ],
+            temperature=0,
+            max_tokens=500,
+        )
+        translated = response.choices[0].message.content.strip()
+        print(f"[TRANSLATE] '{text}' → '{translated}'")
+        return translated if translated else text
+    except Exception as e:
+        print(f"[TRANSLATE ERROR] {e}")
+        return text
 
 
 def parse_with_groq(field: str, text: str) -> dict:
@@ -133,12 +260,22 @@ def parse_with_groq(field: str, text: str) -> dict:
 
         system_prompt = (
             "You are a precise JSON extractor for a voice-powered resume builder. "
-            "The user speaks their answers, sometimes using spoken conventions like "
-            "'dot' for '.', 'at' for '@', 'slash' for '/', 'underscore' for '_'. "
-            "Your job: extract the information and return ONLY a valid JSON object "
-            f"in exactly this shape: {meta['schema']}. "
-            "Do not include any explanation, markdown, or extra text. "
-            "Only output the JSON object."
+            "The input comes from speech recognition and may contain errors. "
+            "IMPORTANT — BILINGUAL SUPPORT: The user may speak in Tamil, English, or a mix of both. "
+            "If the input is in Tamil (தமிழ்) or has Tamil words, TRANSLATE everything to English first, "
+            "then extract the fields. The output JSON must ALWAYS be in English. "
+            "SPOKEN CONVENTIONS the user may use: "
+            "'dot' or 'period' = '.', 'at' or 'at the rate' = '@', "
+            "'slash' = '/', 'underscore' or 'under score' = '_', "
+            "'hyphen' or 'dash' = '-', 'space' = ' '. "
+            "SPOKEN NUMBERS: 'one'='1','two'='2','three'='3','four'='4','five'='5',"
+            "'six'='6','seven'='7','eight'='8','nine'='9','zero'='0', "
+            "'double X' = 'XX', 'triple X' = 'XXX'. "
+            "IMPORTANT: Preserve names exactly as spoken — do NOT correct unusual "
+            "or non-English names to common English words. "
+            "Return ONLY a valid JSON object in exactly this shape: "
+            f"{meta['schema']}. "
+            "No explanation, no markdown, no extra text. Only the JSON object."
         )
 
         user_prompt = (
@@ -176,8 +313,25 @@ def parse_with_groq(field: str, text: str) -> dict:
 def _esc(s):
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
+# Filler patterns to strip when Groq fails and we use raw text as fallback
+_FILLER_RE = re.compile(
+    r"^\s*(so\s+)?basically\s*|"
+    r"^\s*i\s+(have\s+)?(worked|work|was|am|am\s+a|have\s+been)\s+(as\s+|at\s+|in\s+)?|"
+    r"^\s*(my|the)\s+(name\s+is|role\s+is|job\s+is|title\s+is)\s+|"
+    r"^\s*(i\s+(am|m)\s+(a\s+)?|i\s+am\s+currently\s+(a\s+)?)|"
+    r"^\s*(so\s+|well\s+|actually\s+|basically\s+)+",
+    re.IGNORECASE,
+)
+
+def _smart_clean(text: str) -> str:
+    """Strip common spoken filler from the start of a sentence as a fallback."""
+    cleaned = _FILLER_RE.sub("", text.strip())
+    # Capitalize first letter
+    return cleaned[:1].upper() + cleaned[1:] if cleaned else text.strip()
+
 def _skills_html(skills):
     return "".join(f"<span class='skill-badge'>{_esc(s)}</span>" for s in skills)
+
 
 
 # ──────────────────────────────────────────────
@@ -430,11 +584,14 @@ def parse_endpoint():
 @app.route("/conversation/init", methods=["GET"])
 def conversation_init():
     session = convman.create_session()
-    step    = convman.get_current_step(session["session_id"])
+    sid = session["session_id"]
+    question = convman.get_current_question(sid)
+    step    = convman.get_current_step(sid)
     return jsonify({
-        "session_id": session["session_id"],
+        "session_id": sid,
         "step_id":    step["id"],
-        "question":   step["q"],
+        "question":   question,
+        "language":   session.get("language", "en"),
         "data":       session["data"],
     })
 
@@ -444,14 +601,55 @@ def conversation_next():
     sid = request.args.get("session_id")
     if not sid:
         return jsonify({"error": "session_id required"}), 400
-    step = convman.get_current_step(sid)
-    if not step:
+    
+    session = convman.get_session(sid)
+    if not session:
         return jsonify({"error": "no session"}), 404
+    
+    step = convman.get_current_step(sid)
+    question = convman.get_current_question(sid)
+    lang = session.get("language", "en")
+
     return jsonify({
         "session_id": sid,
         "step_id":    step["id"],
-        "question":   step["q"],
-        "data":       convman.get_session(sid)["data"],
+        "question":   question,
+        "language":   lang,
+        "data":       session["data"],
+    })
+
+
+@app.route("/conversation/set-language", methods=["POST"])
+def conversation_set_language():
+    """
+    Switch language mid-conversation and return current question in new language.
+    Useful for the language button toggle.
+    """
+    payload = request.get_json() or {}
+    sid = payload.get("session_id")
+    new_lang = payload.get("language", "en")  # "en" or "ta"
+    
+    if not sid:
+        return jsonify({"error": "session_id required"}), 400
+    
+    session = convman.get_session(sid)
+    if not session:
+        return jsonify({"error": "invalid session_id"}), 404
+    
+    # Update language
+    session["language"] = "ta" if new_lang == "ta" else "en"
+    print(f"[LANG SWITCH] session={sid[:8]}, new_lang={session['language']}")
+    
+    # Get current question in the new language
+    step = convman.get_current_step(sid)
+    question = convman.get_current_question(sid)
+    
+    return jsonify({
+        "session_id": sid,
+        "step_id":    step["id"],
+        "question":   question,
+        "language":   session["language"],
+        "data":       session["data"],
     })
 
 
@@ -468,11 +666,19 @@ def conversation_submit():
     if not session:
         return jsonify({"error": "invalid session_id"}), 404
 
+    # Get language from session
+    lang = session.get("language", "en")
+    
     current_step = convman.get_current_step(sid)
     step_field   = current_step.get("field") if current_step else None
-    print(f"\n[CONV] session={sid[:8]}, step={step_field}, text={text}")
+    print(f"\n[CONV] session={sid[:8]}, step={step_field}, lang={lang}, text={text}")
 
-    # ── Save raw answer first (session controller handles basic field routing) ──
+    # ── If Tamil mode, translate the answer to English first ──
+    if lang == "ta" and text and step_field and step_field != "language":
+        text = translate_to_english(text)
+        print(f"[CONV] translated to English: {text}")
+
+    # ── Save the (now English) answer ──
     convman.submit_answer(sid, text)
 
     # ── Groq-powered enrichment for all structured fields ──
@@ -486,36 +692,43 @@ def conversation_submit():
                 if step_field == "name" and parsed.get("name"):
                     data["name"] = parsed["name"]
 
-                elif step_field == "contact":
-                    if parsed.get("email"):
-                        data["email"] = parsed["email"]
-                    if parsed.get("phone"):
-                        data["phone"] = parsed["phone"]
+                elif step_field == "email" and parsed.get("email"):
+                    data["email"] = parsed["email"]
+
+                elif step_field == "phone" and parsed.get("phone"):
+                    data["phone"] = parsed["phone"]
 
                 elif step_field == "education":
-                    # Build a clean readable string AND store structured data
+                    # Compact dash-separated display
                     parts = []
-                    if parsed.get("degree"):  parts.append(parsed["degree"])
-                    if parsed.get("field"):   parts.append(f"in {parsed['field']}")
-                    if parsed.get("institution"): parts.append(f"from {parsed['institution']}")
-                    if parsed.get("year"):    parts.append(f"({parsed['year']})")
-                    if parsed.get("cgpa"):    parts.append(f"CGPA: {parsed['cgpa']}")
-                    display = " ".join(parts) if parts else text
-                    # Replace last appended raw entry with structured one
+                    if parsed.get("degree") and parsed.get("field"):
+                        parts.append(f"{parsed['degree']} ({parsed['field']})")
+                    elif parsed.get("degree"):
+                        parts.append(parsed["degree"])
+                    elif parsed.get("field"):
+                        parts.append(parsed["field"])
+                    if parsed.get("institution"): parts.append(parsed["institution"])
+                    year_str = parsed.get("year", "")
+                    if parsed.get("cgpa"): year_str = f"{year_str}, CGPA {parsed['cgpa']}" if year_str else f"CGPA {parsed['cgpa']}"
+                    if year_str: parts.append(year_str)
+                    display = " — ".join(parts) if parts else _smart_clean(text)
                     if data["education"]:
                         data["education"][-1] = {"text": display, "structured": parsed}
                     else:
                         data["education"] = [{"text": display, "structured": parsed}]
 
                 elif step_field == "experience":
+                    # Compact dash-separated display
                     parts = []
-                    if parsed.get("role"):    parts.append(parsed["role"])
-                    if parsed.get("company"): parts.append(f"at {parsed['company']}")
+                    if parsed.get("role"):       parts.append(parsed["role"])
+                    if parsed.get("company"):    parts.append(parsed["company"])
+                    if parsed.get("department"): parts.append(parsed["department"])
+                    # Year range
                     if parsed.get("startYear"):
                         yr = parsed["startYear"]
                         if parsed.get("endYear"): yr += f" – {parsed['endYear']}"
-                        parts.append(f"({yr})")
-                    display = " ".join(parts) if parts else text
+                        parts.append(yr)
+                    display = " — ".join(parts) if parts else _smart_clean(text)
                     if data["experience"]:
                         data["experience"][-1] = {"text": display, "structured": parsed}
                     else:
@@ -524,9 +737,9 @@ def conversation_submit():
                 elif step_field == "projects":
                     parts = []
                     if parsed.get("title"):       parts.append(parsed["title"])
-                    if parsed.get("description"): parts.append(f"— {parsed['description']}")
-                    if parsed.get("tech"):        parts.append(f"[{parsed['tech']}]")
-                    display = " ".join(parts) if parts else text
+                    if parsed.get("description"): parts.append(parsed["description"])
+                    if parsed.get("tech"):        parts.append(f"Tech: {parsed['tech']}")
+                    display = " — ".join(parts) if parts else _smart_clean(text)
                     if data["projects"]:
                         data["projects"][-1] = {"text": display, "structured": parsed}
                     else:
@@ -544,9 +757,14 @@ def conversation_submit():
                 elif step_field == "github" and parsed.get("url"):
                     data["github"] = parsed["url"]
 
-                elif step_field in ("job_role", "summary", "additional"):
-                    # Use raw text directly — no restructuring needed
-                    pass
+                elif step_field == "summary" and parsed.get("summary"):
+                    data["summary"] = parsed["summary"]
+
+                elif step_field == "job_role" and parsed.get("role"):
+                    data["job_role"] = parsed["role"]
+
+                elif step_field == "additional" and parsed.get("value"):
+                    data["additional"] = parsed["value"]
 
     except Exception as e:
         print(f"[CONV GROQ ERROR] {e}")
@@ -555,10 +773,17 @@ def conversation_submit():
     convman.advance(sid)
     next_step = convman.get_current_step(sid)
 
+    # Get the UPDATED language from session (in case user just selected it)
+    updated_lang = session.get("language", "en")
+    
+    # Use the stored language from session
+    next_question = convman.get_current_question(sid)
+
     return jsonify({
         "session_id": sid,
         "step_id":    next_step["id"] if next_step else "done",
-        "question":   next_step["q"]  if next_step else "",
+        "question":   next_question,
+        "language":   updated_lang,
         "data":       session["data"],
         "completed":  session["completed"],
     })
@@ -606,27 +831,43 @@ def transcribe_endpoint():
     """
     Accept an audio file upload, transcribe it with Groq Whisper,
     and optionally parse the resulting text for the given field.
+    Can optionally use language preference from session if session_id is provided.
     """
     if "file" not in request.files:
         return jsonify({"error": "No audio file provided"}), 400
 
     f     = request.files["file"]
     field = (request.form.get("field") or request.args.get("field") or "").lower()
+    lang  = (request.form.get("language") or request.args.get("language") or "").lower()
+    
+    # If session_id provided and no explicit language, use session's language
+    sid   = request.form.get("session_id") or request.args.get("session_id")
+    if sid and not lang:
+        session = convman.get_session(sid)
+        if session:
+            lang = session.get("language", "en")
 
     try:
         client = get_groq_client()
         audio_bytes = f.read()
         filename    = f.filename or "audio.webm"
 
-        # Groq Whisper transcription
-        transcription = client.audio.transcriptions.create(
-            file=(filename, audio_bytes, f.mimetype or "audio/webm"),
-            model="whisper-large-v3-turbo",
-            response_format="verbose_json",
-            language="en",
-        )
+        # Groq Whisper transcription — auto-detect language for bilingual support
+        whisper_kwargs = {
+            "file": (filename, audio_bytes, f.mimetype or "audio/webm"),
+            "model": "whisper-large-v3-turbo",
+            "response_format": "verbose_json",
+        }
+        # Only set language if explicitly English; omit for Tamil/auto-detect
+        if lang == "en":
+            whisper_kwargs["language"] = "en"
+        elif lang == "ta":
+            whisper_kwargs["language"] = "ta"
+        # else: auto-detect
+
+        transcription = client.audio.transcriptions.create(**whisper_kwargs)
         text = (transcription.text or "").strip()
-        print(f"[TRANSCRIBE] field={field}, transcript={text}")
+        print(f"[TRANSCRIBE] field={field}, lang={lang}, transcript={text}")
 
     except Exception as e:
         print(f"[TRANSCRIBE ERROR] {e}")
